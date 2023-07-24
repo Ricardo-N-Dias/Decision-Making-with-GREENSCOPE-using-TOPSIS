@@ -1,0 +1,81 @@
+Aspen data gatherer
+This file imports data from aspen and prints it in a .xlsx file to ease the input in SimaPro
+clc
+clear
+close all
+
+run("V1\aspen_code.m")
+run("V2\aspen_code.m")
+run("V3\aspen_code.m")
+
+save
+clear
+
+The data imported to the Vx variables will be gathered in order to get the Inlet, Outlet and energy flows
+load('matlab.mat')
+versions   = ["V1" "V2" "V3"];
+Components = ["CO2" "H2O" "CaO" "CaCO3"];
+
+for i = 1:length(versions)
+        if Import.(string(versions(i))).streams_solid ~=""
+            disp(Import.(string(versions(i))).streams_solid)
+            Number_of_Inlet_streams = input("How many (SOLID) Inlet streams?")
+            for j = 1:Number_of_Inlet_streams
+                Name_of_Inlet_streams = input(strcat("Name Inlet stream number ", string(j), " ?"),"s")
+            end
+        end
+        if Import.(string(versions(i))).streams_mixed ~=""
+            disp(Import.(string(versions(i))).streams_mixed)
+            Number_of_Inlet_streams = input("How many (MIXED) Inlet streams?")
+            for j = 1:Number_of_Inlet_streams
+                Name_of_Inlet_streams = input(strcat("Name Inlet stream number ", string(j), " ?"),"s")
+            end
+        end
+
+
+    Inlet_data.(string(versions(i)))  = Import.(string(versions(i))).nodes.data([1,2,8,9,10,11],1:Import.(string(versions(i))).Number_of_Inlet_streams);
+    Outlet_data.(string(versions(i))) = Import.(string(versions(i))).nodes.data([1,2,8,9,10,11],Import.(string(versions(i))).Number_of_Inlet_streams+1:Import.(string(versions(i))).Number_of_Inlet_streams+Import.(string(versions(i))).Number_of_Outlet_streams);
+    final_table.(string(versions(i))) = array2table([Inlet_data.(string(versions(i))) Outlet_data.(string(versions(i)))]);
+    for j = 1:Import.(string(versions(i))).Number_of_Inlet_streams
+        Inlet_string.(string(versions(i)))(j)  = strcat("Inlet_",string(j));
+    end
+    for j = 1:Import.(string(versions(i))).Number_of_Outlet_streams
+        Outlet_string.(string(versions(i)))(j) = strcat("Outlet_",string(j));
+    end
+    final_table.(string(versions(i))).Properties.VariableNames = [Inlet_string.(string(versions(i))) Outlet_string.(string(versions(i)))];
+    final_table.(string(versions(i))).Properties.RowNames = ["T" "P" Components]
+    for k = 1:length(Components)
+        if i == 8
+            Total_Inlet.(string(versions(i))).(Components(k))  = sum(Import.(string(versions(i))).nodes.data(k+7,[1,4]))
+            Total_Outlet.(string(versions(i))).(Components(k)) = sum(Import.(string(versions(i))).nodes.data(k+7,[2,3,5,6]))
+        elseif i == 9
+            Total_Inlet.(string(versions(i))).(Components(k))  = sum(Import.(string(versions(i))).nodes.data(k+7,[1,4]))
+            Total_Outlet.(string(versions(i))).(Components(k)) = sum(Import.(string(versions(i))).nodes.data(k+7,[2,3,5,6]))     
+        else
+            Total_Inlet.(string(versions(i))).(Components(k))  = sum(Import.(string(versions(i))).nodes.data(k+7,1:Import.(string(versions(i))).Number_of_Inlet_streams))
+            Total_Outlet.(string(versions(i))).(Components(k)) = sum(Import.(string(versions(i))).nodes.data(k+7,Import.(string(versions(i))).Number_of_Inlet_streams+1:Import.(string(versions(i))).Number_of_Inlet_streams+Import.(string(versions(i))).Number_of_Outlet_streams))
+        end
+    end
+    Total_electricity.(string(versions(i)))= sum(Import.(string(versions(i))).nodes.equipmentenergy.pump);
+    Total_heat.(string(versions(i)))       = sum(Import.(string(versions(i))).nodes.equipmentenergy.HE(Import.(string(versions(i))).nodes.equipmentenergy.HE>0));
+    Total_cooling.(string(versions(i)))    = sum(Import.(string(versions(i))).nodes.equipmentenergy.HE(Import.(string(versions(i))).nodes.equipmentenergy.HE<0));
+    Cooling_water.(string(versions(i)))    = abs(Total_cooling.(string(versions(i))))/4.186/10*3600*0.02;
+    for k = 1:length(Components)
+        Final_massbalance.(string(versions(i)))(k,:)= array2table([Total_Inlet.(string(versions(i))).(Components(k)) Total_Outlet.(string(versions(i))).(Components(k))]);
+        Final_massbalance.(string(versions(i))).Properties.VariableNames = ["Inlet" "Outlet"];
+    end
+    Final_massbalance.(string(versions(i))).Properties.RowNames      = Components;
+
+    Final_data_Input.(string(versions(i))) = array2table([Total_electricity.(string(versions(i))) Total_heat.(string(versions(i))) Cooling_water.(string(versions(i)))]);
+    Final_data_Input.(string(versions(i))).Properties.VariableNames = ["Electricity" "Heat" "Cooling Water"];
+end
+
+sheets = sheetnames("CaL balance.xlsx");
+for i = 1:length(versions)
+    writetable(final_table.(string(versions(i))),"CaL balance.xlsx",'Sheet',sheets(i),'WriteRowNames',true)
+    [lines,columns] = size(final_table.(string(versions(i))));
+    writetable(Final_massbalance.(string(versions(i))),"CaL balance.xlsx",'Sheet',sheets(i),'Range',strcat("A",string(lines+1+4)),'WriteRowNames',true) 
+    [lines2,columns2] = size(Final_massbalance.(string(versions(i))));
+    writetable(Final_data_Input.(string(versions(i))),"CaL balance.xlsx",'Sheet',sheets(i),'Range',strcat("A",string(lines+1+4+lines2+1+4)),'WriteRowNames',true)   
+end
+save("final.mat")
