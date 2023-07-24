@@ -1,0 +1,123 @@
+TOPSIS analyser 
+This file imports the results from GRENSCOPE and SimaPro and analyses them with TOPSIS
+clc
+clear
+close all
+GREENSCOPE data import
+indicators = [1;2;3;4;5;6;7;8;9;10;11;12;13;14;16;17;18;19;20;21;22;24;25;27;28;29;30;32;33;34;36;38;39;40;41;42;43;44;45;46;47;49;50;51;52;53;54;55;56;57;58;59;60;61;62;63;64;65;66;67;68;69;70;73;74;77;93;94;95;98;99;102;103;104;105;107;110;112;118;119;120;121;122;123;125;126;127;128;130;139];
+r_GNRS.total = zeros(4,length(indicators));
+versions   = ["V1" "V2" "V3"];
+
+for j =0:(length(versions)-1)
+    filename      = strcat("GRNS - V",string(j),".xlsm");
+    count.Efficiency  = indicators(indicators<27);
+    count.Environment = indicators(indicators<93  & indicators>26 );
+    count.Energy      = indicators(indicators<107 & indicators>92 );
+    count.Economy     = indicators(indicators<140 & indicators>106);
+    w.Efficiency  = ones(1,length(count.Efficiency))';
+    w.Environment = ones(1,length(count.Environment))';
+    w.Energy      = ones(1,length(count.Energy))';
+    w.Economy     = ones(1,length(count.Economy))';
+    filesave     = strcat("CaLV_",string(j)," workspace");
+    %%
+    %%%Indicator name import
+    Efficiency.indice   = "Efficiency";
+    Environment.indice  = "Environment";
+    Energy.indice       = "Energy";
+    Economy.indice      = "Economy";
+
+    Efficiency.num      = transpose(1:26);
+    Environment.num     = transpose(1:66);
+    Energy.num          = transpose(1:14);
+    Economy.num         = transpose(1:33);
+
+    [A,B]= xlsread(filename,"IV. Material Efficiency", 'D6:R31');
+    A = A(:,[8 12 14 15]);
+    B = B(:,1);
+    Efficiency.Value     = A(:,1);
+    Efficiency.Best      = A(:,2);
+    Efficiency.Worst     = A(:,3);
+    Efficiency.Score     = A(:,4);
+    Efficiency.Delta     = abs(Efficiency.Best - Efficiency.Worst);
+    Efficiency.indicador = B;
+    m.Efficiency = [Efficiency.Value, Efficiency.Best, Efficiency.Worst, Efficiency.Delta , Efficiency.Score];
+
+    [C,D]= xlsread(filename ,"V. Environmental", 'D6:R71');
+    C = C(:,[8 12 14 15]);
+    D = D(:,1);
+    Environment.Value     = C(:,1);
+    Environment.Best      = C(:,2);
+    Environment.Worst     = C(:,3);
+    Environment.Score     = C(:,4);
+    Environment.Delta     = abs(Environment.Best - Environment.Worst);
+    Environment.indicador = D;
+    m.Environment = [Environment.Value, Environment.Best, Environment.Worst, Environment.Delta, Environment.Score];
+
+    [E,F]= xlsread(filename ,"VI. Energy", 'E6:P19');
+    E = E(:,[1 5 7 8]);
+    F = F(:,1);
+    Energy.Value     = E(:,1);
+    Energy.Best      = E(:,2);
+    Energy.Worst     = E(:,3);
+    Energy.Score     = E(:,4);
+    Energy.Delta     = abs(Energy.Best - Energy.Worst);
+    Energy.indicador = F;
+    m.Energy = [Energy.Value, Energy.Best, Energy.Worst, Energy.Delta, Energy.Score];
+
+    [G,H]= xlsread(filename ,"VII. Economic", 'E6:P38');
+    G = G(:,[1 5 7 8]);
+    H = H(:,1);
+    Economy.Value      = G(:,1);
+    Economy.Best       = G(:,2);
+    Economy.Worst      = G(:,3);
+    Economy.Score      = G(:,4);
+    Economy.Delta      = abs(Economy.Best - Economy.Worst);
+    Economy.indicador  = H;
+    m.Economy = [Economy.Value, Economy.Best, Economy.Worst, Economy.Delta, Economy.Score];
+    clear A B C D E F G H
+
+    m.total = cat(1,m.Efficiency, m.Environment ,m.Energy ,m.Economy);
+    r_GNRS.total(j+1,:)      =m.total(indicators,5);
+    r_GNRS.Efficiency(j+1,:) =m.total(count.Efficiency, 5);
+    r_GNRS.Environment(j+1,:)=m.total(count.Environment,5);
+    r_GNRS.Energy(j+1,:)     =m.total(count.Energy,     5);
+    r_GNRS.Economy(j+1,:)    =m.total(count.Economy,    5);
+
+    for e = 1:length(indicators)
+
+        if indicators(e) <= 26
+            Indicadores.string(e,1) = Efficiency.indicador(indicators(e));
+            Indicadores.titulos(e,1)= strcat("1.",string(indicators(e)));
+        end
+
+        if (indicators(e) > 26)  && (indicators(e) <= 92)
+            Indicadores.string(e,1) = Environment.indicador(indicators(e)-26);
+            Indicadores.titulos(e,1)= strcat("2.",string(indicators(e)-26));
+        end
+
+        if (indicators(e) > 92)  && (indicators(e) <= 106)
+            Indicadores.string(e,1) = Energy.indicador(indicators(e)-92);
+            Indicadores.titulos(e,1)= strcat("3.",string(indicators(e)-92));
+        end
+
+        if (indicators(e) > 106) && (indicators(e) <= 139)
+            Indicadores.string(e,1) = Economy.indicador(indicators(e)-106);
+            Indicadores.titulos(e,1)= strcat("4.",string(indicators(e)-106));
+        end
+
+    end
+    %     save(filesave);
+    clear Efficiency Environment Energy Economy
+end
+SimaPro 
+Data import
+load("SimaPro_results.mat","Compare_Results","method_name","filename")
+for j = 1:length(filename)
+    r_SimaPro.(method_name(j)) = Compare_Results.(method_name(j))';
+end
+TOPSIS
+Using TOPSIS the algorithm is written to minimise the equilidian distance to the best performing alternative in every indicator. Therefore, for the SimaPro and OpenLCA must use the absolute values of the results obtained, since the prject being evaluated has a positive impact in the environemnt (which means a negative result in the analysis)
+Analysis of GREENSCOPE, SimaPro and OpenLCA
+   The results can be found in the variables Cplus_X and the ranked results in the valriables Cplus_Ranked_X
+GREENSCOPE
+[Cplus_GNRS,Cplus_ranked_GNRS]=TOPSIS_GENERAL(r_GNRS.total)
